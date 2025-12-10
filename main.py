@@ -58,6 +58,7 @@ def add_password():
 
 # Function to retrieve a password 
 def get_password():
+
     """
     Retrieve a password for a given website.
 
@@ -67,6 +68,20 @@ def get_password():
     Returns:
         None
     """
+    site = input("Enter website to retrieve: ").strip()
+    if not site:
+        print("Website cannot be empty.")
+        return
+    if site not in websites:
+        print(f"No entry found for '{site}'.")
+        return
+    idx = websites.index(site)
+    user = usernames[idx]
+    enc = encrypted_passwords[idx]
+    dec = caesar_decrypt(enc, SHIFT)
+    print(f"Website: {site}")
+    print(f"Username: {user}")
+    print(f"Password: {dec}")
 
 # Function to save passwords to a JSON file 
 def save_passwords():
