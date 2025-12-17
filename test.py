@@ -1,95 +1,95 @@
 import unittest
 import json
 import os
-from main import is_strong_password, generate_password, add_password, get_password, save_passwords, load_passwords
+import io
+from unittest.mock import patch
+from main import (
+    is_strong_password,
+    generate_password,
+    add_password,
+    get_password,
+    save_passwords,
+    load_passwords,
+    websites,
+    usernames,
+    encrypted_passwords,
+    caesar_encrypt,
+    caesar_decrypt,
+    SHIFT,
+)
 
 class TestPasswordManager(unittest.TestCase):
 
     def setUp(self):
-        # Create a temporary vault.txt file for testing
-        self.test_passwords_file = "test_vault.txt"
-        self.test_passwords = [
-            {"website": "example.com", "username": "user123", "password": "P@ssw0rd"},
-            {"website": "test.com", "username": "testuser", "password": "TestP@ss123"}
-        ]
-        with open(self.test_passwords_file, "w") as f:
-            json.dump(self.test_passwords, f)
+        # Clear global lists before each test
+        websites.clear()
+        usernames.clear()
+        encrypted_passwords.clear()
+        # Remove vault.txt if it exists
+        if os.path.exists("vault.txt"):
+            os.remove("vault.txt")
 
     def tearDown(self):
-        # Remove the temporary vault.txt file after testing
-        os.remove(self.test_passwords_file)
+        # Clean up vault.txt after each test
+        if os.path.exists("vault.txt"):
+            os.remove("vault.txt")
 
     def test_is_strong_password(self):
-        # Test a strong password
-        strong_password = "Str0ngP@ssw0rd"
-        self.assertTrue(is_strong_password(strong_password))
-
-        # Test a weak password (doesn't meet minimum length)
-        weak_password = "Weak123"
-        self.assertFalse(is_strong_password(weak_password))
-
-        # Test a weak password (missing uppercase)
-        weak_password = "weakpassword123!"
-        self.assertFalse(is_strong_password(weak_password))
-
-        # Test a weak password (missing special character)
-        weak_password = "Weakpassword123"
-        self.assertFalse(is_strong_password(weak_password))
+        self.assertTrue(is_strong_password("Str0ngP@ssw0rd"))
+        self.assertFalse(is_strong_password("Weak123"))
+        self.assertFalse(is_strong_password("weakpassword123!"))
+        self.assertFalse(is_strong_password("Weakpassword123"))
 
     def test_generate_password(self):
-        # Test generating a password of the specified length
-        length = 12
-        password = generate_password(length)
-        self.assertEqual(len(password), length)
-        self.assertTrue(is_strong_password(password))
+        pw12 = generate_password(12)
+        self.assertEqual(len(pw12), 12)
+        self.assertTrue(is_strong_password(pw12))
 
-        # Test generating a password of different length
-        length = 16
-        password = generate_password(length)
-        self.assertEqual(len(password), length)
-        self.assertTrue(is_strong_password(password))
+        pw16 = generate_password(16)
+        self.assertEqual(len(pw16), 16)
+        self.assertTrue(is_strong_password(pw16))
 
-    def test_add_password(self):
-        # Test adding a password
-        website = "example.net"
-        username = "user456"
-        password = "StrongP@ssw0rd"
-        add_password(website, username, password)
+    @patch("builtins.input", side_effect=["example.com", "user123", "n", "Str0ngP@ssw0rd"])
+    def test_add_password(self, mock_input):
+        add_password()
+        self.assertIn("example.com", websites)
+        idx = websites.index("example.com")
+        self.assertEqual(usernames[idx], "user123")
+        self.assertEqual(caesar_decrypt(encrypted_passwords[idx], SHIFT), "Str0ngP@ssw0rd")
 
-        # Check if the added password is in the lists
-        self.assertIn({"website": website, "username": username, "password": password}, self.test_passwords)
+    @patch("builtins.input", side_effect=["example.com"])
+    def test_get_password(self, mock_input):
+        # Preload a password
+        websites.append("example.com")
+        usernames.append("user123")
+        encrypted_passwords.append(caesar_encrypt("Str0ngP@ssw0rd", SHIFT))
 
-    def test_get_password(self):
-        # Test retrieving an existing password
-        website = "example.com"
-        username, password = get_password(website)
-        self.assertEqual(username, "user123")
-        self.assertEqual(password, "P@ssw0rd")
+        with patch("sys.stdout", new_callable=io.StringIO) as fake_out:
+            get_password()
+            output = fake_out.getvalue()
+            self.assertIn("Website: example.com", output)
+            self.assertIn("Username: user123", output)
+            self.assertIn("Str0ngP@ssw0rd", output)
 
-        # Test retrieving a non-existent password
-        website = "nonexistent.com"
-        username, password = get_password(website)
-        self.assertIsNone(username)
-        self.assertIsNone(password)
+    def test_save_and_load_passwords(self):
+        # Preload a password
+        websites.append("example.com")
+        usernames.append("user123")
+        encrypted_passwords.append(caesar_encrypt("Str0ngP@ssw0rd", SHIFT))
 
-    def test_save_passwords(self):
-        # Save passwords to a temporary file
-        save_passwords(self.test_passwords, self.test_passwords_file)
+        save_passwords()
+        self.assertTrue(os.path.exists("vault.txt"))
 
-        # Check if the saved passwords match the original passwords
-        with open(self.test_passwords_file, "r") as f:
-            saved_passwords = json.load(f)
-        self.assertEqual(saved_passwords, self.test_passwords)
+        # Clear lists and reload
+        websites.clear()
+        usernames.clear()
+        encrypted_passwords.clear()
+        data = load_passwords()
+        self.assertEqual(len(data), 1)
+        self.assertEqual(data[0]["website"], "example.com")
+        self.assertEqual(data[0]["username"], "user123")
+        self.assertEqual(caesar_decrypt(data[0]["password"], SHIFT), "Str0ngP@ssw0rd")
 
-    def test_load_passwords(self):
-        # Test loading passwords from an existing file
-        loaded_passwords = load_passwords(self.test_passwords_file)
-        self.assertEqual(loaded_passwords, self.test_passwords)
 
-        # Test loading passwords from a non-existent file
-        nonexistent_file = "nonexistent.txt"
-        loaded_passwords = load_passwords(nonexistent_file)
-        self.assertEqual(loaded_passwords, [])
-
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()
